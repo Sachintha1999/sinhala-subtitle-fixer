@@ -3,16 +3,15 @@
 import streamlit as st
 from deep_translator import GoogleTranslator
 import time
+import random # අහඹු ලෙස තේරීම සඳහා
 
 # --- අපේ මොළවල් දෙකම මෙතනින් සම්බන්ධ කරගැනීම ---
-from knowledge_base import correction_rules      # පුස්තකාලය (Library)
-from intelligent_rules import apply_intelligent_rules # එන්ජින් කාමරය (Engine Room)
+from knowledge_base import correction_rules
+from intelligent_rules import apply_intelligent_rules
 
 def process_srt_content_batched(english_content):
-    """
-    පරිවර්තන ක්‍රියාවලියේ ප්‍රධාන පාලකය.
-    """
     try:
+        # (පරිවර්තන ක්‍රියාවලියේ මුල් කොටස වෙනස් නොවේ...)
         translator = GoogleTranslator(source='en', target='si')
         blocks = english_content.strip().split('\n\n')
         total_blocks = len(blocks)
@@ -43,7 +42,7 @@ def process_srt_content_batched(english_content):
             time.sleep(0.5)
         status_text.success("පරිවර්තනය සම්පූර්ණයි! දැන් ගොනුව සකසමින් පවතී...")
         
-        # --- මොළවල් දෙකෙන්ම වැඩ ගන්නා තැන ---
+        # --- මොළවල් දෙකෙන්ම වැඩ ගන්නා තැන (විවිධත්වය සමඟ) ---
         final_blocks = []
         for i, block in enumerate(blocks):
             lines = block.strip().splitlines()
@@ -52,9 +51,17 @@ def process_srt_content_batched(english_content):
                 translated_dialogue = translated_dialogues[i]
                 
                 # 1. පුස්තකාලයෙන් (knowledge_base) මතකය පරීක්ෂා කිරීම
-                for bad_phrase, good_phrase in correction_rules.items():
+                for bad_phrase, good_phrases in correction_rules.items():
                     if bad_phrase in translated_dialogue:
-                         translated_dialogue = translated_dialogue.replace(bad_phrase, good_phrase)
+                        # --- මෙන්න අලුත් වෙනස! ---
+                        # good_phrases කියන්නේ list එකක්ද කියලා බලනවා
+                        if isinstance(good_phrases, list):
+                            # list එකක් නම්, ඒකෙන් එකක් අහඹු ලෙස තෝරගන්නවා
+                            chosen_phrase = random.choice(good_phrases)
+                            translated_dialogue = translated_dialogue.replace(bad_phrase, chosen_phrase)
+                        else:
+                            # list එකක් නෙවෙයි නම්, පරණ විදියටම වැඩ කරනවා
+                            translated_dialogue = translated_dialogue.replace(bad_phrase, good_phrases)
                 
                 # 2. එන්ජින් කාමරයෙන් (intelligent_rules) තර්කනය යෙදීම
                 dialogue_lines = translated_dialogue.splitlines()
@@ -71,12 +78,13 @@ def process_srt_content_batched(english_content):
         return None
 
 # ==========================================================
-# UI (පරිශීලක අතුරුමුහුණත) - මෙතනින් පහළට ඇත්තේ පෙනුම පමණි
+# UI (පරිශීලක අතුරුමුහුණත)
 # ==========================================================
 st.set_page_config(page_title="සිංහල උපසිරැසි සකසනය", page_icon="📝")
-st.title("📝 සරල සිංහල උපසිරැසි සකසනය v10.0 (Modular Brain)")
-st.markdown("අපගේ දියුණු වන **ශබ්දකෝෂය** සහ **බුද්ධිමත් රීති පද්ධතිය** යන දෙකම මගින්, ඔබගේ උපසිරැසි වඩාත් ස්වභාවික ලෙස සකසනු ඇත.")
+st.title("📝 සරල සිංහල උපසිරැසි සකසනය v11.0 (නිර්මාණශීලී)")
+st.markdown("අපගේ දියුණු වන **ශබ්දකෝෂය** සහ **බුද්ධිමත් රීති පද්ධතිය** මගින්, ඔබගේ උපසිරැසි වලට **විවිධත්වයක්** එක්කර, වඩාත් ස්වභාවික ලෙස සකසනු ඇත.")
 
+# (ඉතිරි කෝඩ් එක වෙනස් නොවේ)
 st.subheader("පියවර 1: ඉංග්‍රීසි `.srt` ෆයිල් එක Upload කරන්න")
 uploaded_file = st.file_uploader("ඔබගේ ඉංග්‍රීසි .srt ෆයිල් එක තෝරන්න", type=['srt'])
 if uploaded_file is not None:
