@@ -23,54 +23,46 @@ def process_srt_content_batched(english_content):
         block_indices_to_translate = []
         for i, block in enumerate(blocks):
             lines = block.strip().splitlines()
-            if len(lines) > 2:
+            if len(lines) > 2 and any(c.isalpha() for c in "\n".join(lines[2:])):
                 dialogues_to_translate.append("\n".join(lines[2:]))
                 block_indices_to_translate.append(i)
         
         st.info(f"පරිවර්තනය සඳහා දෙබස් {len(dialogues_to_translate)}ක් හඳුනාගත්තා.")
         
         translated_dialogues_list = []
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        
-        batch_size = 100 # Batch size එක ටිකක් වැඩි කළා වේගය සඳහා
-        for i in range(0, len(dialogues_to_translate), batch_size):
-            batch = dialogues_to_translate[i:i + batch_size]
-            results = translate_client.translate(batch, target_language='si', format_='text')
-            for result in results:
-                translated_dialogues_list.append(result['translatedText'])
-            
-            processed_count = i + len(batch)
-            progress_percentage = min(int((processed_count / len(dialogues_to_translate)) * 100), 100) if dialogues_to_translate else 100
-            status_text.text(f"දෙබස් {len(dialogues_to_translate)}න් {min(processed_count, len(dialogues_to_translate))}ක් සකසමින් පවතී... ({progress_percentage}%)")
-        
-        st.success("මූලික පරිවර්තනය සම්පූර්ණයි! දැන් AI මොළය ක්‍රියාත්මක වේ...")
-        time.sleep(1)
-        
+        if dialogues_to_translate:
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            batch_size = 100
+            for i in range(0, len(dialogues_to_translate), batch_size):
+                batch = dialogues_to_translate[i:i + batch_size]
+                results = translate_client.translate(batch, target_language='si', format_='text')
+                for result in results:
+                    translated_dialogues_list.append(result['translatedText'])
+                
+                processed_count = i + len(batch)
+                progress_percentage = min(int((processed_count / len(dialogues_to_translate)) * 100), 100)
+                status_text.text(f"දෙබස් {len(dialogues_to_translate)}න් {min(processed_count, len(dialogues_to_translate))}ක් සකසමින් පවතී... ({progress_percentage}%)")
+            status_text.success("මූලික පරිවර්තනය සම්පූර්ණයි! දැන් AI මොළය ක්‍රියාත්මක වේ...")
+            time.sleep(1)
+
         final_blocks = list(blocks)
         translated_iter = iter(translated_dialogues_list)
         
         for index in block_indices_to_translate:
             header_lines = final_blocks[index].strip().splitlines()[:2]
             header = "\n".join(header_lines)
-            
-            # --- මෙන්න නිවැරදි කළ ප්‍රධාන ක්‍රියාවලිය ---
-            # 1. Google Translate වෙතින් අමු පරිවර්තනය ලබාගැනීම
             raw_translated_dialogue = next(translated_iter, "")
-
-            # 2. පුස්තකාලයෙන් (knowledge_base) නියත වැරදි නිවැරදි කිරීම
+            
             knowledge_applied = raw_translated_dialogue
             for bad_phrase, good_phrase in correction_rules.items():
                 knowledge_applied = knowledge_applied.replace(bad_phrase, good_phrase)
             
-            # 3. එන්ජින් කාමරයෙන් (intelligent_rules) ව්‍යාකරණ රටා නිවැරදි කිරීම
             dialogue_lines = knowledge_applied.splitlines()
             intelligent_lines = [apply_intelligent_rules(line) for line in dialogue_lines]
             intelligent_applied = "\n".join(intelligent_lines)
             
-            # 4. කලාකරුවාගෙන් (creative_rules) නිර්මාණශීලී බවක් එක් කිරීම
             creative_applied = apply_creative_rules(intelligent_applied)
-            
             final_blocks[index] = header + '\n' + creative_applied
 
         st.success("සියලුම AI ක්‍රියාවලි අවසන්!")
@@ -78,14 +70,14 @@ def process_srt_content_batched(english_content):
 
     except Exception as e:
         st.error(f"පරිවර්තනය කිරීමේදී බරපතල දෝෂයක් ඇතිවිය: {e}")
-        st.code(e) # දෝෂය කුමක්දැයි හරියටම පෙන්වීමට
+        st.code(f"Error details: {str(e)}")
         return None
 
 # ==========================================================
 # UI (පරිශීලක අතුරුමුහුණත)
 # ==========================================================
 st.set_page_config(page_title="සිංහල උපසිරැසි සකසනය", page_icon="📝", layout="wide")
-st.title("📝 සරල සිංහල උපසිරැසි සකසනය v15.1 (Core Engine Fixed)")
+st.title("📝 සරල සිංහල උපසිරැසි සකසනය v15.2 (Final Core Engine)")
 st.markdown("Google Cloud හි නිල API තාක්ෂණය මගින් බලගැන්වෙන, ස්ථාවර සහ විශ්වාසවන්ත පරිවර්තන පද්ධතිය.")
 
 # (UI එකේ ඉතිරි කොටස වෙනස් නොවේ)
