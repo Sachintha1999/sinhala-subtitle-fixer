@@ -10,13 +10,6 @@ from knowledge_base import correction_rules
 from intelligent_rules import apply_intelligent_rules
 from creative_rules import apply_creative_rules
 
-def get_dialogue(block_text):
-    """SRT බ්ලොක් එකකින් දෙබස පමණක් වෙන්කර ගනී"""
-    lines = block_text.strip().splitlines()
-    if len(lines) > 2:
-        return "\n".join(lines[2:])
-    return None
-
 def process_srt_content(english_content):
     try:
         st.info("Google Cloud එන්ජිම ආරම්භ කරමින්...")
@@ -26,48 +19,51 @@ def process_srt_content(english_content):
 
         blocks = english_content.strip().split('\n\n')
         
-        # --- පරිවර්තනය කළ යුතු දෙබස් සහ ඒවායේ මුල් ස්ථාන සලකුණු කර ගැනීම ---
-        dialogues_to_translate = {i: get_dialogue(block) for i, block in enumerate(blocks) if get_dialogue(block)}
+        dialogues_to_translate = {i: ("\n".join(block.strip().splitlines()[2:])) for i, block in enumerate(blocks) if len(block.strip().splitlines()) > 2 and any(c.isalpha() for c in "\n".join(block.strip().splitlines()[2:]))}
         
         st.info(f"පරිවර්තනය සඳහා දෙබස් {len(dialogues_to_translate)}ක් හඳුනාගත්තා.")
 
+        translated_dialogues = {}
         if dialogues_to_translate:
-            # පරිවර්තනය සඳහා දෙබස් ලැයිස්තුවක් සකස් කිරීම
             dialogue_list = list(dialogues_to_translate.values())
-            
+            original_indices = list(dialogues_to_translate.keys())
+
             progress_bar = st.progress(0)
             status_text = st.empty()
 
-            # Batch translation
-            results = translate_client.translate(dialogue_list, target_language='si', format_='text')
-            translated_dialogues = [res['translatedText'] for res in results]
+            # --- මෙන්න අලුත්, දියුණු කළ Batch Processing ක්‍රමය ---
+            batch_size = 128  # Google එකේ උපරිම සීමාව
+            all_translated_texts = []
+
+            for i in range(0, len(dialogue_list), batch_size):
+                batch = dialogue_list[i:i + batch_size]
+                results = translate_client.translate(batch, target_language='si', format_='text')
+                all_translated_texts.extend([res['translatedText'] for res in results])
+
+                processed_count = i + len(batch)
+                progress_percentage = min(int((processed_count / len(dialogue_list)) * 100), 100)
+                status_text.text(f"දෙබස් {len(dialogue_list)}න් {min(processed_count, len(dialogue_list))}ක් සකසමින් පවතී... ({progress_percentage}%)")
             
+            # පරිවර්තනය වූ දෙබස්, මුල් ස්ථාන සමඟ නැවත සම්බන්ධ කිරීම
+            for i, original_index in enumerate(original_indices):
+                translated_dialogues[original_index] = all_translated_texts[i]
+
             status_text.success("මූලික පරිවර්තනය සම්පූර්ණයි! දැන් AI මොළය ක්‍රියාත්මක වේ...")
-            progress_bar.progress(100)
             time.sleep(1)
-
-            # --- පරිවර්තනය වූ දෙබස් නැවත නිවැරදි ස්ථාන වලට ආදේශ කිරීම ---
-            # මුල් බ්ලොක්ස් ලැයිස්තුවක් සාදා ගැනීම
-            final_blocks = list(blocks)
+        
+        final_blocks = list(blocks)
+        for index, raw_translated in translated_dialogues.items():
+            header_lines = final_blocks[index].strip().splitlines()[:2]
+            header = "\n".join(header_lines)
             
-            # පරිවර්තනය වූ දෙබස්, මුල් බ්ලොක් අංකය අනුවම ආදේශ කිරීම
-            for i, (original_index, original_dialogue) in enumerate(dialogues_to_translate.items()):
-                header_lines = final_blocks[original_index].strip().splitlines()[:2]
-                header = "\n".join(header_lines)
-                
-                # අදාළ පරිවර්තනය ලබා ගැනීම
-                raw_translated = translated_dialogues[i]
-                
-                # මොළවල් තුනම ක්‍රියාත්මක කිරීම
-                knowledge_applied = raw_translated
-                for bad, good in correction_rules.items():
-                    knowledge_applied = knowledge_applied.replace(bad, good)
+            knowledge_applied = raw_translated
+            for bad, good in correction_rules.items():
+                knowledge_applied = knowledge_applied.replace(bad, good)
 
-                intelligent_applied = "\n".join([apply_intelligent_rules(line) for line in knowledge_applied.splitlines()])
-                creative_applied = apply_creative_rules(intelligent_applied)
-                
-                # නිවැරදි ස්ථානයටම ආදේශ කිරීම
-                final_blocks[original_index] = header + '\n' + creative_applied
+            intelligent_applied = "\n".join([apply_intelligent_rules(line) for line in knowledge_applied.splitlines()])
+            creative_applied = apply_creative_rules(intelligent_applied)
+            
+            final_blocks[index] = header + '\n' + creative_applied
 
         st.success("සියලුම AI ක්‍රියාවලි අවසන්!")
         return "\n\n".join(final_blocks)
@@ -81,7 +77,7 @@ def process_srt_content(english_content):
 # UI (පරිශීලක අතුරුමුහුණත)
 # ==========================================================
 st.set_page_config(page_title="සිංහල උපසිරැසි සකසනය", page_icon="📝", layout="wide")
-st.title("📝 සරල සිංහල උපසිරැසි සකසනය v15.3 (Final Stable Engine)")
+st.title("📝 සරල සිංහල උපසිරැසි සකසනය v15.4 (Final Stable Engine)")
 st.markdown("Google Cloud හි නිල API තාක්ෂණය මගින් බලගැන්වෙන, ස්ථාවර සහ විශ්වාසවන්ත පරිවර්තන පද්ධතිය.")
 
 # (UI එකේ ඉතිරි කොටස වෙනස් නොවේ)
