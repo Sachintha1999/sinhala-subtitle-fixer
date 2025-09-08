@@ -4,8 +4,8 @@ import streamlit as st
 from deep_translator import GoogleTranslator
 import time
 
-# --- අපේ දැනුම් පද්ධතිය (Knowledge Base) ---
-correction_rules = {}
+# --- අපේ "මොළේ" (knowledge_base.py) මෙතනින් සම්බන්ධ කරගැනීම ---
+from knowledge_base import correction_rules
 
 def process_srt_content_batched(english_content):
     """
@@ -46,19 +46,26 @@ def process_srt_content_batched(english_content):
             progress_percentage = min(int(((i + batch_size) / total_blocks) * 100), 100)
             progress_bar.progress(progress_percentage)
             status_text.text(f"දෙබස් කොටස් {total_blocks}න් {min(i + batch_size, total_blocks)}ක් සකසමින් පවතී... ({progress_percentage}%)")
-            
-            # --- මෙන්න අලුතෙන් එකතු කරපු වැදගත්ම කොටස ---
-            # Rate Limit එකට අහුවෙන්නේ නැති වෙන්න පොඩි විවේකයක් ගන්නවා
-            time.sleep(0.5) 
+            time.sleep(0.5)
         
         status_text.success("පරිවර්තනය සම්පූර්ණයි! දැන් ගොනුව සකසමින් පවතී...")
 
+        # පරිවර්තනයෙන් පසු, අපේ "මොළේ" පාවිච්චි කර වැරදි නිවැරදි කිරීම
         final_blocks = []
         for i, block in enumerate(blocks):
             lines = block.strip().splitlines()
             if len(lines) > 1:
                 header = lines[0] + '\n' + lines[1]
-                final_block = header + '\n' + translated_dialogues[i]
+                
+                # පරිවර්තනය වූ දෙබස
+                translated_dialogue = translated_dialogues[i]
+                
+                # අපේ මොළේ පාවිච්චි කරලා, දෙබස තවත් දියුණු කිරීම
+                for bad_phrase, good_phrase in correction_rules.items():
+                    if bad_phrase in translated_dialogue:
+                         translated_dialogue = translated_dialogue.replace(bad_phrase, good_phrase)
+
+                final_block = header + '\n' + translated_dialogue
                 final_blocks.append(final_block)
 
         final_sinhala_srt = "\n\n".join(final_blocks)
@@ -70,8 +77,8 @@ def process_srt_content_batched(english_content):
 
 # --- Web App එකේ පෙනුම හදන තැන ---
 st.set_page_config(page_title="සිංහල උපසිරැසි සකසනය", page_icon="📝")
-st.title("📝 සරල සිංහල උපසිරැසි සකසනය v6.1 (ස්ථාවර වේගය)")
-st.markdown("ඔබගේ ඉංග්‍රීසි උපසිරැසි ගොනුව ලබාදෙන්න. එය **ස්ථාවර වේගයකින්**, කිසිදු බාධාවකින් තොරව පරිවර්තනය කරනු ඇත.")
+st.title("📝 සරල සිංහල උපසිරැසි සකසනය v7.0 (වෙන්කළ මොළය)")
+st.markdown("ඔබගේ ඉංග්‍රීසි උපසිරැසි ගොනුව ලබාදෙන්න. එය ස්ථාවර වේගයකින් පරිවර්තනය කර, අපගේ දියුණු වන දැනුම් පද්ධතිය මගින් තවදුරටත් නිවැරදි කරනු ඇත.")
 
 st.subheader("පියවර 1: ඉංග්‍රීසි `.srt` ෆයිල් එක Upload කරන්න")
 uploaded_file = st.file_uploader("ඔබගේ ඉංග්‍රීසි .srt ෆයිල් එක තෝරන්න", type=['srt'])
