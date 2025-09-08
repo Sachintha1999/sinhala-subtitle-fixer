@@ -10,8 +10,8 @@ from intelligent_rules import apply_intelligent_rules
 from creative_rules import apply_creative_rules
 
 def process_srt_content_batched(english_content):
+    # (මේ function එකේ කිසිම වෙනසක් නෑ. ඒ නිසා ඒක එහෙමම තියෙනවා)
     try:
-        # (පරිවර්තන ක්‍රියාවලියේ මුල් කොටස වෙනස් නොවේ...)
         translator = GoogleTranslator(source='en', target='si')
         blocks = english_content.strip().split('\n\n')
         total_blocks = len(blocks)
@@ -42,35 +42,22 @@ def process_srt_content_batched(english_content):
             time.sleep(0.5)
         status_text.success("පරිවර්තනය සම්පූර්ණයි! දැන් ගොනුව සකසමින් පවතී...")
         
-        # --- මතකය සහිත, දියුණු කළ මොළ පද්ධතිය ---
         final_blocks = []
-        previous_dialogue_context = "" # "කෙටි කාලීන මතකය" (සටහන් පොත) ආරම්භ කිරීම
-
+        previous_dialogue_context = ""
         for i, block in enumerate(blocks):
             lines = block.strip().splitlines()
             if len(lines) > 1:
                 header = lines[0] + '\n' + lines[1]
                 translated_dialogue = translated_dialogues[i]
-                
-                # 1. පුස්තකාලයෙන් නියත වැරදි නිවැරදි කිරීම
                 for bad_phrase, good_phrase in correction_rules.items():
                     if bad_phrase in translated_dialogue:
                          translated_dialogue = translated_dialogue.replace(bad_phrase, good_phrase)
-                
-                # 2. එන්ජින් කාමරයට, "මතකයත්" සමග නියෝග දීම
                 dialogue_lines = translated_dialogue.splitlines()
-                # මෙතනදී, කලින් දෙබස (context) ලබා දෙනවා
                 intelligent_lines = [apply_intelligent_rules(line, previous_dialogue_context) for line in dialogue_lines]
                 final_dialogue = "\n".join(intelligent_lines)
-
-                # 3. කලාකරුවාගෙන් නිර්මාණශීලී බවක් එක් කිරීම
                 creative_dialogue = apply_creative_rules(final_dialogue)
-
                 final_block = header + '\n' + creative_dialogue
                 final_blocks.append(final_block)
-
-                # --- වැදගත්ම දේ: "සටහන් පොත" update කිරීම ---
-                # ඊළඟ දෙබස සඳහා, මේ දෙබස මතකයේ තබාගැනීම
                 previous_dialogue_context = creative_dialogue
         
         final_sinhala_srt = "\n\n".join(final_blocks)
@@ -80,27 +67,65 @@ def process_srt_content_batched(english_content):
         return None
 
 # ==========================================================
-# UI (පරිශීලක අතුරුමුහුණත)
+# UI (පරිශීලක අතුරුමුහුණත) - මෙතන තමයි ලොකුම වෙනස වෙන්නේ
 # ==========================================================
-st.set_page_config(page_title="සිංහල උපසිරැසි සකසනය", page_icon="📝")
-st.title("📝 සරල සිංහල උපසිරැසි සකසනය v13.0 (Context-Aware)")
-st.markdown("අපගේ AI පද්ධතියට දැන් **කෙටි කාලීන මතකයක්** ඇත. එමගින්, දෙබස් අතර ඇති සම්බන්ධය තේරුම් ගෙන, වඩාත් නිවැරදි සහ ස්වභාවික උපසිරැසි නිර්මාණය කරනු ඇත.")
+st.set_page_config(page_title="සිංහල උපසිරැසි සකසනය", page_icon="📝", layout="wide") # layout="wide" වලින් ඇප් එක පළල් කරනවා
+st.title("📝 සරල සිංහල උපසිරැසි සකසනය v14.0 (සජීවී සංස්කාරකය)")
+st.markdown("ඔබගේ උපසිරැසි පරිවර්තනය කර, **බාගත කිරීමට පෙර** සජීවීව සංස්කරණය කිරීමේ හැකියාව දැන් ඔබට ඇත.")
 
-# (ඉතිරි කෝඩ් එක වෙනස් නොවේ)
+# --- Session State එකේ දත්ත තැන්පත් කිරීම ---
+# මේක හරියට ඇප් එකේ තාවකාලික මතකයක් වගේ
+if 'translated_content' not in st.session_state:
+    st.session_state.translated_content = None
+if 'original_content' not in st.session_state:
+    st.session_state.original_content = None
+if 'file_name' not in st.session_state:
+    st.session_state.file_name = "edited_subtitle.srt"
+
 st.subheader("පියවර 1: ඉංග්‍රීසි `.srt` ෆයිල් එක Upload කරන්න")
 uploaded_file = st.file_uploader("ඔබගේ ඉංග්‍රීසි .srt ෆයිල් එක තෝරන්න", type=['srt'])
+
 if uploaded_file is not None:
     st.success(f"'{uploaded_file.name}' ෆයිල් එක සාර්ථකව ලැබුනි.")
     english_content = uploaded_file.getvalue().decode("utf-8")
-    st.subheader("පියවර 2: පරිවර්තනය කර නිවැරදි කරන්න")
+    st.session_state.original_content = english_content
+    st.session_state.file_name = uploaded_file.name
+    
+    st.subheader("පියවර 2: පරිවර්තනය කර පෙරදසුන් කරන්න")
     if st.button("✨ දැන් ක්‍රියාත්මක කරන්න"):
-        final_content = process_srt_content_batched(english_content)
+        with st.spinner("AI පද්ධතිය ක්‍රියාත්මක වෙමින් පවතී..."):
+            final_content = process_srt_content_batched(english_content)
         if final_content:
+            st.session_state.translated_content = final_content
             st.balloons()
-            st.subheader("ප්‍රතිඵලය: සකසන ලද ෆයිල් එක Download කරගන්න")
-            st.download_button(
-               label="📥 සකසන ලද සිංහල ෆයිල් එක මෙතනින් බාගන්න",
-               data=final_content.encode('utf-8'),
-               file_name=f"fixed_sinhala_{uploaded_file.name}",
-               mime="text/plain"
-            )
+
+# --- සජීවී සංස්කාරකය පෙන්වන තැන ---
+if st.session_state.translated_content:
+    st.subheader("පියවර 3: සජීවීව සංස්කරණය කර බාගත කරන්න")
+    
+    original_blocks = st.session_state.original_content.strip().split('\n\n')
+    translated_blocks = st.session_state.translated_content.strip().split('\n\n')
+
+    # හැම දෙබසක් සඳහාම අලුත් text editor එකක් හැදීම
+    for i in range(len(translated_blocks)):
+        col1, col2 = st.columns(2)
+        with col1:
+            st.text_area("මුල් ඉංග්‍රීසි දෙබස", value=original_blocks[i], height=150, key=f"orig_{i}", disabled=True)
+        with col2:
+            st.text_area("AI පරිවර්තනය (සංස්කරණය කළ හැක)", value=translated_blocks[i], height=150, key=f"edit_{i}")
+
+    st.subheader("පියවර 4: අවසන් උපසිරැසිය බාගත කරන්න")
+    
+    # --- සංස්කරණය කළ දත්ත එකතු කර, download button එක හැදීම ---
+    final_edited_blocks = []
+    for i in range(len(translated_blocks)):
+        final_edited_blocks.append(st.session_state[f"edit_{i}"])
+
+    final_edited_content = "\n\n".join(final_edited_blocks)
+    
+    st.download_button(
+       label="📥 සංස්කරණය කළ අවසන් ෆයිල් එක මෙතනින් බාගන්න",
+       data=final_edited_content.encode('utf-8'),
+       file_name=f"edited_sinhala_{st.session_state.file_name}",
+       mime="text/plain"
+    )
