@@ -17,31 +17,25 @@ def process_srt_content_batched(english_content):
         translator = GoogleTranslator(source='en', target='si')
         blocks = english_content.strip().split('\n\n')
         total_blocks = len(blocks)
-        
         dialogues_to_translate = []
         block_indices_to_translate = []
-        
         for i, block in enumerate(blocks):
             lines = block.strip().splitlines()
             if len(lines) > 2:
                 dialogues_to_translate.append("\n".join(lines[2:]))
                 block_indices_to_translate.append(i)
-
         batch_size = 50
         translated_dialogues_list = []
         progress_bar = st.progress(0)
         status_text = st.empty()
-
         for i in range(0, len(dialogues_to_translate), batch_size):
             batch = dialogues_to_translate[i:i + batch_size]
             translated_batch = translator.translate_batch(batch)
             translated_dialogues_list.extend(translated_batch)
-            
             processed_count = i + len(batch)
             progress_percentage = min(int((processed_count / len(dialogues_to_translate)) * 100), 100) if dialogues_to_translate else 100
             status_text.text(f"දෙබස් {len(dialogues_to_translate)}න් {processed_count}ක් සකසමින් පවතී... ({progress_percentage}%)")
             time.sleep(0.5)
-        
         status_text.success("පරිවර්තනය සම්පූර්ණයි! දැන් ගොනුව සකසමින් පවතී...")
         
         final_blocks = list(blocks)
@@ -57,12 +51,10 @@ def process_srt_content_batched(english_content):
                 if bad_phrase in translated_dialogue:
                      translated_dialogue = translated_dialogue.replace(bad_phrase, good_phrase)
             
-            # --- මෙන්න අලුතෙන් නිවැරදි කළ කොටස ---
             # 2. එන්ජින් කාමරයෙන් ව්‍යාකරණ රටා නිවැරදි කිරීම
             dialogue_lines = translated_dialogue.splitlines()
-            # මෙතනදී, කලින් දෙබසක මතකයක් නැති නිසා, context="" ලෙස ලබා දෙමු.
-            # අනාගතයේදී අපිට context මතකය නැවත එකතු කළ හැක.
-            intelligent_lines = [apply_intelligent_rules(line, context="") for line in dialogue_lines]
+            # --- මෙන්න නිවැරදි කළ පේළිය ---
+            intelligent_lines = [apply_intelligent_rules(line) for line in dialogue_lines]
             final_dialogue = "\n".join(intelligent_lines)
 
             # 3. කලාකරුවාගෙන් නිර්මාණශීලී බවක් එක් කිරීම
@@ -71,18 +63,18 @@ def process_srt_content_batched(english_content):
             final_blocks[index] = header + '\n' + creative_dialogue
 
         return "\n\n".join(final_blocks)
-
     except Exception as e:
         st.error(f"පරිවර්තනය කිරීමේදී දෝෂයක් ඇතිවිය: {e}")
         return None
 
 # ==========================================================
-# UI (පරිශීලක අතුරුමුහුණත) - කිසිදු වෙනසක් නෑ
+# UI (පරිශීලක අතුරුමුහුණත)
 # ==========================================================
 st.set_page_config(page_title="සිංහල උපසිරැසි සකසනය", page_icon="📝", layout="wide")
-st.title("📝 සරල සිංහල උපසිරැසි සකසනය v14.2 (Bug Fixed)")
+st.title("📝 සරල සිංහල උපසිරැසි සකසනය v14.3 (Major Bug Fixed)")
 st.markdown("ඔබගේ උපසිරැසි පරිවර්තනය කර, **බාගත කිරීමට පෙර** සජීවීව සංස්කරණය කිරීමේ හැකියාව දැන් ඔබට ඇත.")
 
+# (ඉතිරි UI කෝඩ් එක වෙනස් නොවේ)
 if 'translated_content' not in st.session_state:
     st.session_state.translated_content = None
 if 'original_content' not in st.session_state:
