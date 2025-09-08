@@ -10,60 +10,64 @@ from knowledge_base import correction_rules
 from intelligent_rules import apply_intelligent_rules
 from creative_rules import apply_creative_rules
 
-def process_srt_content_batched(english_content):
+def get_dialogue(block_text):
+    """SRT බ්ලොක් එකකින් දෙබස පමණක් වෙන්කර ගනී"""
+    lines = block_text.strip().splitlines()
+    if len(lines) > 2:
+        return "\n".join(lines[2:])
+    return None
+
+def process_srt_content(english_content):
     try:
         st.info("Google Cloud එන්ජිම ආරම්භ කරමින්...")
         credentials = service_account.Credentials.from_service_account_info(st.secrets["gcp_service_account"])
         translate_client = translate.Client(credentials=credentials)
         st.success("Google Cloud සමග සාර්ථකව සම්බන්ධ විය.")
-        
+
         blocks = english_content.strip().split('\n\n')
         
-        dialogues_to_translate = []
-        block_indices_to_translate = []
-        for i, block in enumerate(blocks):
-            lines = block.strip().splitlines()
-            if len(lines) > 2 and any(c.isalpha() for c in "\n".join(lines[2:])):
-                dialogues_to_translate.append("\n".join(lines[2:]))
-                block_indices_to_translate.append(i)
+        # --- පරිවර්තනය කළ යුතු දෙබස් සහ ඒවායේ මුල් ස්ථාන සලකුණු කර ගැනීම ---
+        dialogues_to_translate = {i: get_dialogue(block) for i, block in enumerate(blocks) if get_dialogue(block)}
         
         st.info(f"පරිවර්තනය සඳහා දෙබස් {len(dialogues_to_translate)}ක් හඳුනාගත්තා.")
-        
-        translated_dialogues_list = []
+
         if dialogues_to_translate:
+            # පරිවර්තනය සඳහා දෙබස් ලැයිස්තුවක් සකස් කිරීම
+            dialogue_list = list(dialogues_to_translate.values())
+            
             progress_bar = st.progress(0)
             status_text = st.empty()
-            batch_size = 100
-            for i in range(0, len(dialogues_to_translate), batch_size):
-                batch = dialogues_to_translate[i:i + batch_size]
-                results = translate_client.translate(batch, target_language='si', format_='text')
-                for result in results:
-                    translated_dialogues_list.append(result['translatedText'])
-                
-                processed_count = i + len(batch)
-                progress_percentage = min(int((processed_count / len(dialogues_to_translate)) * 100), 100)
-                status_text.text(f"දෙබස් {len(dialogues_to_translate)}න් {min(processed_count, len(dialogues_to_translate))}ක් සකසමින් පවතී... ({progress_percentage}%)")
+
+            # Batch translation
+            results = translate_client.translate(dialogue_list, target_language='si', format_='text')
+            translated_dialogues = [res['translatedText'] for res in results]
+            
             status_text.success("මූලික පරිවර්තනය සම්පූර්ණයි! දැන් AI මොළය ක්‍රියාත්මක වේ...")
+            progress_bar.progress(100)
             time.sleep(1)
 
-        final_blocks = list(blocks)
-        translated_iter = iter(translated_dialogues_list)
-        
-        for index in block_indices_to_translate:
-            header_lines = final_blocks[index].strip().splitlines()[:2]
-            header = "\n".join(header_lines)
-            raw_translated_dialogue = next(translated_iter, "")
+            # --- පරිවර්තනය වූ දෙබස් නැවත නිවැරදි ස්ථාන වලට ආදේශ කිරීම ---
+            # මුල් බ්ලොක්ස් ලැයිස්තුවක් සාදා ගැනීම
+            final_blocks = list(blocks)
             
-            knowledge_applied = raw_translated_dialogue
-            for bad_phrase, good_phrase in correction_rules.items():
-                knowledge_applied = knowledge_applied.replace(bad_phrase, good_phrase)
-            
-            dialogue_lines = knowledge_applied.splitlines()
-            intelligent_lines = [apply_intelligent_rules(line) for line in dialogue_lines]
-            intelligent_applied = "\n".join(intelligent_lines)
-            
-            creative_applied = apply_creative_rules(intelligent_applied)
-            final_blocks[index] = header + '\n' + creative_applied
+            # පරිවර්තනය වූ දෙබස්, මුල් බ්ලොක් අංකය අනුවම ආදේශ කිරීම
+            for i, (original_index, original_dialogue) in enumerate(dialogues_to_translate.items()):
+                header_lines = final_blocks[original_index].strip().splitlines()[:2]
+                header = "\n".join(header_lines)
+                
+                # අදාළ පරිවර්තනය ලබා ගැනීම
+                raw_translated = translated_dialogues[i]
+                
+                # මොළවල් තුනම ක්‍රියාත්මක කිරීම
+                knowledge_applied = raw_translated
+                for bad, good in correction_rules.items():
+                    knowledge_applied = knowledge_applied.replace(bad, good)
+
+                intelligent_applied = "\n".join([apply_intelligent_rules(line) for line in knowledge_applied.splitlines()])
+                creative_applied = apply_creative_rules(intelligent_applied)
+                
+                # නිවැරදි ස්ථානයටම ආදේශ කිරීම
+                final_blocks[original_index] = header + '\n' + creative_applied
 
         st.success("සියලුම AI ක්‍රියාවලි අවසන්!")
         return "\n\n".join(final_blocks)
@@ -77,7 +81,7 @@ def process_srt_content_batched(english_content):
 # UI (පරිශීලක අතුරුමුහුණත)
 # ==========================================================
 st.set_page_config(page_title="සිංහල උපසිරැසි සකසනය", page_icon="📝", layout="wide")
-st.title("📝 සරල සිංහල උපසිරැසි සකසනය v15.2 (Final Core Engine)")
+st.title("📝 සරල සිංහල උපසිරැසි සකසනය v15.3 (Final Stable Engine)")
 st.markdown("Google Cloud හි නිල API තාක්ෂණය මගින් බලගැන්වෙන, ස්ථාවර සහ විශ්වාසවන්ත පරිවර්තන පද්ධතිය.")
 
 # (UI එකේ ඉතිරි කොටස වෙනස් නොවේ)
@@ -95,7 +99,7 @@ if uploaded_file is not None:
     st.subheader("පියවර 2: පරිවර්තනය කර පෙරදසුන් කරන්න")
     if st.button("✨ දැන් ක්‍රියාත්මක කරන්න"):
         with st.spinner("AI පද්ධතිය ක්‍රියාත්මක වෙමින් පවතී..."):
-            final_content = process_srt_content_batched(english_content)
+            final_content = process_srt_content(english_content)
         if final_content:
             st.session_state.translated_content = final_content
             st.balloons()
